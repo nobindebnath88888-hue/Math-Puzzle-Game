@@ -202,17 +202,16 @@ body.light .vote-box p{color:#706050}
     z-index:100;max-height:60dvh;display:flex;flex-direction:column;
     transform:translateY(100%);transition:transform .3s cubic-bezier(.4,0,.2,1)
   }
-  #mob-drawer.open{transform:translateY(0)}
+  #mob-drawer.open{transform:translateY(0)!important}
   .mob-handle{text-align:center;padding:7px 0 5px;font-family:'Cinzel',serif;font-size:13px;font-weight:700;letter-spacing:.10em;color:#d4a017;cursor:pointer;flex-shrink:0;line-height:1}
   .mob-tabs{display:flex;flex-shrink:0;border-bottom:1px solid rgba(180,140,50,.20)}
   .mob-tab{flex:1;font-family:'Cinzel',serif;font-size:12px;font-weight:700;letter-spacing:.08em;padding:9px 4px 7px;text-align:center;color:#7080a0;cursor:pointer;border:none;background:transparent;transition:color .15s}
   .mob-tab.active{color:#d4a017;border-bottom:2px solid #d4a017}
   .mob-panel{display:none;flex:1;overflow-y:auto;flex-direction:column;min-height:0}
-  .mob-panel.active{display:flex}
-  #mob-openbtn{position:fixed;bottom:10px;right:10px;width:40px;height:40px;border-radius:50%;background:rgba(180,140,50,.22);border:1px solid rgba(180,140,50,.45);color:#d4a017;font-size:17px;cursor:pointer;z-index:99;display:flex;align-items:center;justify-content:center}
+  .mob-panel.active{display:flex!important}
+  #mob-openbtn{position:fixed;bottom:12px;right:12px;width:42px;height:42px;border-radius:50%;background:rgba(12,24,52,.92);border:1.5px solid rgba(180,140,50,.55);color:#d4a017;font-size:18px;cursor:pointer;z-index:102;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 14px rgba(0,0,0,.6)}
 }
 @media(min-width:641px){#mob-drawer{display:none!important}#mob-openbtn{display:none!important}}
-@media(max-width:640px){#mob-openbtn{display:flex}}
 </style>
 </head>
 <body>
@@ -282,7 +281,7 @@ body.light .vote-box p{color:#706050}
 </div>
 </div>
 
-<div id="mob-drawer" style="display:none">
+<div id="mob-drawer">
   <div class="mob-handle" id="mob-handle">▲ CHAT &amp; PLAYERS</div>
   <div class="mob-tabs">
     <button class="mob-tab active" data-tab="tchat">🛡 Team</button>
@@ -299,7 +298,7 @@ body.light .vote-box p{color:#706050}
   </div>
   <div class="mob-panel" id="mob-players" style="padding:8px"><div id="mob-pl"></div></div>
 </div>
-<button id="mob-openbtn" style="display:none">💬</button>
+<button id="mob-openbtn">💬</button>
 
 <div id="vote-overlay" class="vote-overlay" style="display:none">
   <div class="vote-box">
@@ -784,19 +783,19 @@ function resizeCanvas(){
   const col=document.getElementById('center-col');
   if(!cv||!col)return;
   const mob=window.innerWidth<=640;
-  let canvasW;
-  if(mob){
-    canvasW=Math.min(window.innerWidth-4,460);
-  } else {
-    const colW=col.clientWidth||700;
-    canvasW=Math.min(colW-14,660);
-  }
-  // Keep cells as close to square as possible (11:9 aspect)
-  const cellW=Math.floor(canvasW/GCOLS);
-  // Allow cells to be slightly taller for readability
-  const cellH=Math.round(cellW*1.05);
-  cv.width=cellW*GCOLS;
-  cv.height=cellH*GROWS;
+
+  // Reserve space for controls + progress bars + sel-info + bank + padding
+  const reservedH=mob?200:230;
+  const availH=window.innerHeight-reservedH;
+  const availW=mob?window.innerWidth-4:(col.clientWidth||700)-14;
+
+  // Fit entirely within available space — cell size drives from whichever axis is tighter
+  const cellByW=Math.floor(availW/GCOLS);
+  const cellByH=Math.floor(availH/GROWS);
+  const cellSz=Math.max(Math.min(cellByW,cellByH),18); // min 18px per cell
+
+  cv.width=cellSz*GCOLS;
+  cv.height=cellSz*GROWS;
   cv.style.width=cv.width+'px';
   cv.style.height=cv.height+'px';
   paint();
@@ -874,7 +873,6 @@ function startGame(rid){
 
   // Mobile drawer
   const drawer=document.getElementById('mob-drawer');
-  if(window.innerWidth<=640)drawer.style.display='flex';
   document.getElementById('mob-openbtn').addEventListener('click',()=>drawer.classList.toggle('open'));
   document.getElementById('mob-handle').addEventListener('click',()=>drawer.classList.toggle('open'));
   document.querySelectorAll('.mob-tab').forEach(tab=>{
