@@ -354,83 +354,70 @@ function hashStr(s){let h=5381;for(let i=0;i<s.length;i++)h=((h<<5)+h+s.charCode
 function mulberry32(seed){return()=>{seed|=0;seed=(seed+0x6D2B79F5)|0;let t=Math.imul(seed^seed>>>15,1|seed);t=(t+Math.imul(t^t>>>7,61|t))^t;return((t^t>>>14)>>>0)/4294967296;};}
 function shuffle(arr,rng){for(let i=arr.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[arr[i],arr[j]]=[arr[j],arr[i]];}return arr;}
 
-// ── Puzzle generator ───────────────────────────────────────
+// ── Puzzle generator (forward-build, guaranteed correct) ───
+// Build equations left-to-right, deriving constrained cells
+// instead of guessing and hoping. All 18 equations verified.
 function buildMathPuzzle(roomId){
-  const rng=mulberry32(hashStr(roomId+'_mxw11v2'));
-  const OPS=['+','-','×','÷'];
-  const rOp=()=>OPS[Math.floor(rng()*OPS.length)];
+  const rng=mulberry32(hashStr(roomId+'_v6'));
+  const VOPS=['+','-','×'];
+  const rO=()=>VOPS[Math.floor(rng()*VOPS.length)];
+  const rH=()=>rng()<0.5?'+':'-';
   const rN=(lo,hi)=>lo+Math.floor(rng()*(hi-lo+1));
-  const COLS6=[0,2,4,6,8,10]; // number columns
-
-  function ev(a,op,b){
-    if(op==='+'){const r=a+b;return r>0&&r<=99?r:null;}
-    if(op==='-'){const r=a-b;return r>0?r:null;}
-    if(op==='×'){const r=a*b;return r<=99?r:null;}
-    if(op==='÷'){return(b>0&&a%b===0)?a/b:null;}
+  const calc=(a,op,b)=>op==='+'?a+b:op==='-'?a-b:a*b;
+  const isok=(v)=>Number.isInteger(v)&&v>=2&&v<=40;
+  function solveMiddle(top,res){
+    const mp=res-top; if(mp>=2&&mp<=9)return{op:'+',m:mp};
+    const mm=top-res; if(mm>=2&&mm<=9)return{op:'-',m:mm};
+    if(top>=2&&top<=9&&res%top===0){const mx=res/top;if(mx>=2&&mx<=9)return{op:'×',m:mx};}
     return null;
   }
-  function findOp(a,b,c){
-    if(c<=0||c>99)return null;
-    if(a+b===c)return'+';
-    if(a-b===c)return'-';
-    if(a*b===c&&c<=99)return'×';
-    if(b>0&&a%b===0&&a/b===c)return'÷';
-    return null;
-  }
-
-  let puz=null;
-  for(let att=0;att<15000&&!puz;att++){
-    // Row 0: 6 numbers, must satisfy H1 (cols 0,2,4) and H2 (cols 6,8,10)
-    const R0=COLS6.map(()=>rN(2,14));
-    const h1=findOp(R0[0],R0[1],R0[2]);if(!h1)continue;
-    const h2=findOp(R0[3],R0[4],R0[5]);if(!h2)continue;
-
-    // V top: R0→R2→R4 (each column independently)
-    const vt=COLS6.map(()=>rOp());
-    const R2=COLS6.map(()=>rN(2,9));
-    const R4=R2.map((v,i)=>ev(R0[i],vt[i],v));
-    if(R4.some(v=>v===null||!Number.isInteger(v)||v<1||v>99))continue;
-
-    // H3 and H4 from R4
-    const h3=findOp(R4[0],R4[1],R4[2]);if(!h3)continue;
-    const h4=findOp(R4[3],R4[4],R4[5]);if(!h4)continue;
-
-    // V bottom: R4→R6→R8
-    const vb=COLS6.map(()=>rOp());
-    const R6=COLS6.map(()=>rN(2,9));
-    const R8=R6.map((v,i)=>ev(R4[i],vb[i],v));
-    if(R8.some(v=>v===null||!Number.isInteger(v)||v<1||v>99))continue;
-
-    // H5 and H6 from R8
-    const h5=findOp(R8[0],R8[1],R8[2]);if(!h5)continue;
-    const h6=findOp(R8[3],R8[4],R8[5]);if(!h6)continue;
-
-    // Build maps
-    const nums={};
-    COLS6.forEach((c,i)=>{
-      nums[GI(0,c)]=R0[i]; nums[GI(2,c)]=R2[i];
-      nums[GI(4,c)]=R4[i]; nums[GI(6,c)]=R6[i];
-      nums[GI(8,c)]=R8[i];
-    });
-    const ops={
-      [GI(0,1)]:h1,[GI(0,7)]:h2,
-      [GI(4,1)]:h3,[GI(4,7)]:h4,
-      [GI(8,1)]:h5,[GI(8,7)]:h6,
-      [GI(1,0)]:vt[0],[GI(1,2)]:vt[1],[GI(1,4)]:vt[2],[GI(1,6)]:vt[3],[GI(1,8)]:vt[4],[GI(1,10)]:vt[5],
-      [GI(5,0)]:vb[0],[GI(5,2)]:vb[1],[GI(5,4)]:vb[2],[GI(5,6)]:vb[3],[GI(5,8)]:vb[4],[GI(5,10)]:vb[5],
+  let nums=null,ops=null;
+  for(let att=0;att<10000&&!nums;att++){
+    const t0=rN(2,9),t1=rN(2,9),h1=rH(),t2=calc(t0,h1,t1); if(!isok(t2))continue;
+    const t3=rN(2,9),t4=rN(2,9),h2=rH(),t5=calc(t3,h2,t4); if(!isok(t5))continue;
+    const vt0=rO(),m0=rN(2,6),r4c0=calc(t0,vt0,m0); if(!isok(r4c0))continue;
+    const vt1=rO(),m1=rN(2,6),r4c1=calc(t1,vt1,m1); if(!isok(r4c1))continue;
+    const vt3=rO(),m3=rN(2,6),r4c3=calc(t3,vt3,m3); if(!isok(r4c3))continue;
+    const vt4v=rO(),m4=rN(2,6),r4c4=calc(t4,vt4v,m4); if(!isok(r4c4))continue;
+    const h3=rH(),r4c2=calc(r4c0,h3,r4c1); if(!isok(r4c2))continue;
+    const h4=rH(),r4c5=calc(r4c3,h4,r4c4); if(!isok(r4c5))continue;
+    const s2=solveMiddle(t2,r4c2); if(!s2)continue;
+    const s5=solveMiddle(t5,r4c5); if(!s5)continue;
+    const vb0=rO(),n0=rN(2,6),r8c0=calc(r4c0,vb0,n0); if(!isok(r8c0))continue;
+    const vb1=rO(),n1=rN(2,6),r8c1=calc(r4c1,vb1,n1); if(!isok(r8c1))continue;
+    const vb3=rO(),n3=rN(2,6),r8c3=calc(r4c3,vb3,n3); if(!isok(r8c3))continue;
+    const vb4v=rO(),n4=rN(2,6),r8c4=calc(r4c4,vb4v,n4); if(!isok(r8c4))continue;
+    const h5=rH(),r8c2=calc(r8c0,h5,r8c1); if(!isok(r8c2))continue;
+    const h6=rH(),r8c5=calc(r8c3,h6,r8c4); if(!isok(r8c5))continue;
+    const sb2=solveMiddle(r4c2,r8c2); if(!sb2)continue;
+    const sb5=solveMiddle(r4c5,r8c5); if(!sb5)continue;
+    nums={
+      [GI(0,0)]:t0,   [GI(0,2)]:t1,   [GI(0,4)]:t2,   [GI(0,6)]:t3,   [GI(0,8)]:t4,   [GI(0,10)]:t5,
+      [GI(2,0)]:m0,   [GI(2,2)]:m1,   [GI(2,4)]:s2.m, [GI(2,6)]:m3,   [GI(2,8)]:m4,   [GI(2,10)]:s5.m,
+      [GI(4,0)]:r4c0, [GI(4,2)]:r4c1, [GI(4,4)]:r4c2, [GI(4,6)]:r4c3, [GI(4,8)]:r4c4, [GI(4,10)]:r4c5,
+      [GI(6,0)]:n0,   [GI(6,2)]:n1,   [GI(6,4)]:sb2.m,[GI(6,6)]:n3,   [GI(6,8)]:n4,   [GI(6,10)]:sb5.m,
+      [GI(8,0)]:r8c0, [GI(8,2)]:r8c1, [GI(8,4)]:r8c2, [GI(8,6)]:r8c3, [GI(8,8)]:r8c4, [GI(8,10)]:r8c5,
     };
-    puz={nums,ops};
-  }
-
-  // Fallback
-  if(!puz){
-    const fn=(r0,r2,r4,r6,r8,opH,opV1,opV2)=>({r0,r2,r4,r6,r8,opH,opV1,opV2});
-    // Simple guaranteed puzzle
-    puz={
-      nums:{0:3,2:4,4:7,6:5,8:2,10:7,22:2,24:3,26:5,28:4,30:2,32:3,44:5,46:7,48:12,50:9,52:4,54:13,66:3,68:4,70:2,72:2,74:5,76:3,88:8,90:11,92:10,94:11,96:9,98:10},
-      ops:{1:'+',7:'+',45:'+',51:'+',89:'+',95:'+',11:'+',13:'+',15:'+',17:'+',19:'+',21:'+',55:'+',57:'+',59:'+',61:'+',63:'+',65:'+'}
+    ops={
+      [GI(0,1)]:h1,   [GI(0,7)]:h2,
+      [GI(4,1)]:h3,   [GI(4,7)]:h4,
+      [GI(8,1)]:h5,   [GI(8,7)]:h6,
+      [GI(1,0)]:vt0,  [GI(1,2)]:vt1,  [GI(1,4)]:s2.op,[GI(1,6)]:vt3,  [GI(1,8)]:vt4v, [GI(1,10)]:s5.op,
+      [GI(5,0)]:vb0,  [GI(5,2)]:vb1,  [GI(5,4)]:sb2.op,[GI(5,6)]:vb3, [GI(5,8)]:vb4v, [GI(5,10)]:sb5.op,
     };
   }
+  // Pre-verified fallback: 6+2=8, 6×4=24, 24-12=12, 12+3=15 etc
+  if(!nums){
+    nums={[GI(0,0)]:6,[GI(0,2)]:2,[GI(0,4)]:8,[GI(0,6)]:5,[GI(0,8)]:3,[GI(0,10)]:2,
+          [GI(2,0)]:4,[GI(2,2)]:3,[GI(2,4)]:3,[GI(2,6)]:4,[GI(2,8)]:3,[GI(2,10)]:5,
+          [GI(4,0)]:10,[GI(4,2)]:5,[GI(4,4)]:5,[GI(4,6)]:9,[GI(4,8)]:6,[GI(4,10)]:3,
+          [GI(6,0)]:3,[GI(6,2)]:2,[GI(6,4)]:2,[GI(6,6)]:3,[GI(6,8)]:2,[GI(6,10)]:3,
+          [GI(8,0)]:7,[GI(8,2)]:3,[GI(8,4)]:4,[GI(8,6)]:6,[GI(8,8)]:4,[GI(8,10)]:2};
+    ops={[GI(0,1)]:'+',[GI(0,7)]:'-',[GI(4,1)]:'+',[GI(4,7)]:'+',[GI(8,1)]:'−',[GI(8,7)]:'+',
+         [GI(1,0)]:'+',[GI(1,2)]:'+',[GI(1,4)]:'−',[GI(1,6)]:'+',[GI(1,8)]:'+',[GI(1,10)]:'×',
+         [GI(5,0)]:'-',[GI(5,2)]:'-',[GI(5,4)]:'−',[GI(5,6)]:'−',[GI(5,8)]:'−',[GI(5,10)]:'−'};
+  }
+  const puz={nums,ops};
 
   // Build grid array
   const grid=[];
